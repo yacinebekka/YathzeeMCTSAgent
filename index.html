@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yahtzee Game</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="navbar">
+        <h1>Yahtzee Game</h1>
+        <div class="navbar-buttons">
+            <a href='index.html'><button id="aiOpponent">AI opponent</button>
+            <a href='assistant.html'><button id="aiAssistant">AI assistant</button></a>
+            <button id="settingsBtn">Settings</button>
+        </div>
+    </div>
+    <div id="settingsPanel" class="settings-panel">
+        <h2>AI Settings</h2>
+        <label for="numSimulations">Number of Simulations:</label>
+        <input type="number" id="numSimulations" value="1000">
+        <label for="depth">Simulation Depth:</label>
+        <input type="number" id="depth" value="100">
+        <label for="uctCValue">UCT C value:</label>
+        <input type="number" id="uctCValue" value="1.414">
+        <label for="pruningFactor">Pruning factor:</label>
+        <input type="number" id="pruningFactor" value="0">
+        <label for="pruningThreshold">Pruning threshold:</label>
+        <input type="number" id="pruningThreshold" value="0">
+    </div>
+    <div class="game-container">
+        <div class="dice-container">
+            <div class="dice-box" id="dice1">
+                <div class="dice">1</div>
+                <input type="checkbox" class="hold-dice" id="hold1">
+            </div>
+            <div class="dice-box" id="dice2">
+                <div class="dice">1</div>
+                <input type="checkbox" class="hold-dice" id="hold2">
+            </div>
+            <div class="dice-box" id="dice3">
+                <div class="dice">4</div>
+                <input type="checkbox" class="hold-dice" id="hold3">
+            </div>
+            <div class="dice-box" id="dice4">
+                <div class="dice">6</div>
+                <input type="checkbox" class="hold-dice" id="hold4">
+            </div>
+            <div class="dice-box" id="dice5">
+                <div class="dice">6</div>
+                <input type="checkbox" class="hold-dice" id="hold5">
+            </div>
+        </div>
+        <div class="buttons-container">
+            <button id="rollDiceBtn">Roll dice</button>
+            <button id="resetGameBtn">Reset game</button>
+        </div>
+    </div>
+    <div class="message-container">
+        <p id="gameMessage">Message about the game</p>
+        <p id="remainingRolls">Rolls left : 3</p>
+    </div>
+    <div class="scoreboards-container">
+        <div class="scoreboard" id="playerScoreboard">
+            <h3>Player</h3>
+            <table>
+                <tbody>
+                    <tr><td>Ones:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="ones" class="score-checkbox"></td></tr>
+                    <tr><td>Twos:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="twos" class="score-checkbox"></td></tr>
+                    <tr><td>Threes:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="threes" class="score-checkbox"></td></tr>
+                    <tr><td>Fours:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="fours" class="score-checkbox"></td></tr>
+                    <tr><td>Fives:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="fives" class="score-checkbox"></td></tr>
+                    <tr><td>Sixes:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="sixes" class="score-checkbox"></td></tr>
+                    <tr><td>Upper board score:</td><td id="upperScore"><span class="score-output">0</span></td><td></td></tr>
+                    <tr><td>Bonus:</td><td id="bonus"><span>0</span class="score-output"></td><td></td></tr>
+                    <tr><td>Three-of-a-kind:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="three_of_a_kind" class="score-checkbox"></td></tr>
+                    <tr><td>Four-of-a-kind:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="four_of_a_kind" class="score-checkbox"></td></tr>
+                    <tr><td>Full house:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="full_house" class="score-checkbox"></td></tr>
+                    <tr><td>Small straight:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="small_straight" class="score-checkbox"></td></tr>
+                    <tr><td>Large straight:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="large_straight" class="score-checkbox"></td></tr>
+                    <tr><td>Yahtzee:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="yahtzee" class="score-checkbox"></td></tr>
+                    <tr><td>Chance:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="chance" class="score-checkbox"></td></tr>
+                    <tr><td>Lower board score:</td><td id="lowerScore"><span class="score-output">0</span></td><td></td></tr>
+                    <tr><td>Total score:</td><td id="totalScore"><span class="score-output">0</span></td><td></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="scoreboard" id="aiScoreboard">
+            <h3>AI</h3>
+            <table>
+                <tbody>
+                    <tr><td>Ones:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="ones" class="score-checkbox"></td></tr>
+                    <tr><td>Twos:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="twos" class="score-checkbox"></td></tr>
+                    <tr><td>Threes:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="threes" class="score-checkbox"></td></tr>
+                    <tr><td>Fours:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="fours" class="score-checkbox"></td></tr>
+                    <tr><td>Fives:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="fives" class="score-checkbox"></td></tr>
+                    <tr><td>Sixes:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="sixes" class="score-checkbox"></td></tr>
+                    <tr><td>Upper board score:</td><td id="upperScore"><span class="score-output">0</span></td><td></td></tr>
+                    <tr><td>Bonus:</td><td id="bonus"><span>0</span class="score-output"></td><td></td></tr>
+                    <tr><td>Three-of-a-kind:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="three_of_a_kind" class="score-checkbox"></td></tr>
+                    <tr><td>Four-of-a-kind:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="four_of_a_kind" class="score-checkbox"></td></tr>
+                    <tr><td>Full house:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="full_house" class="score-checkbox"></td></tr>
+                    <tr><td>Small straight:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="small_straight" class="score-checkbox"></td></tr>
+                    <tr><td>Large straight:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="large_straight" class="score-checkbox"></td></tr>
+                    <tr><td>Yahtzee:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="yahtzee" class="score-checkbox"></td></tr>
+                    <tr><td>Chance:</td><td><span class="score-output">0</span></td><td><input type="checkbox" name="chance" class="score-checkbox"></td></tr>
+                    <tr><td>Lower board score:</td><td id="lowerScore"><span class="score-output">0</span></td><td></td></tr>
+                    <tr><td>Total score:</td><td id="totalScore"><span class="score-output">0</span></td><td></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <footer class="game-footer">
+        <p>© 2024 Yahtzee Game. All rights reserved.</p>
+    </footer>
+    <script src="scripts/opponent.js" type="module"></script>
+</body>
+</html>

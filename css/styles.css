@@ -1,0 +1,285 @@
+/* Apply box-sizing to all elements */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+}
+
+.navbar {
+    width: 100%;  /* Ensures the navbar takes up exactly the width of the viewport */
+    background-color: #333;  /* Dark color for the navbar */
+    color: white;
+    padding: 10px 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navbar h1 {
+    margin: 0;
+    font-size: 24px;  /* Large enough to be readable */
+}
+
+.navbar-buttons button {
+    padding: 8px 12px;
+    margin-left: 10px;  /* Space between buttons */
+    background-color: #007bff;  /* Blue color for buttons */
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+}
+
+.navbar-buttons button:hover {
+    background-color: #0056b3;  /* Darker blue on hover */
+}
+
+.game-container {
+    background-color: #f8f8f8; /* Light gray background for the container */
+    padding: 20px;
+    margin: 20px auto; /* Top and bottom margin with auto horizontal margins */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Subtle shadow for depth */
+    border-radius: 5px; /* Rounded corners for aesthetics */
+    text-align: center; /* Centering content */
+    width: 60%; /* Adjust width to preferred size, here set to 50% of the viewport */
+    max-width: 800px; /* Maximum width limit */
+}
+
+.dice-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px; /* Maintained space between dice and buttons */
+}
+
+.dice-box {
+    display: flex;
+    flex-direction: column; /* Aligns items vertically */
+    align-items: center; /* Centers items horizontally in the box */
+    margin: 0 10px; /* Spacing between each dice box */
+}
+
+.dice {
+    width: 60px; /* Maintains uniform size for all dice */
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #fff; /* White background for each dice */
+    border: 1px solid #ccc; /* Border for dice */
+    border-radius: 5px; /* Rounded corners for dice */
+    font-size: 24px; /* Readable font size */
+    margin-bottom: 5px; /* Space between the die and its checkbox */
+}
+
+.hold-dice {
+    cursor: pointer; /* Indicates that the checkbox is clickable */
+}
+
+
+.buttons-container {
+    display: flex;
+    justify-content: center; /* Centering buttons horizontally */
+}
+
+button {
+    padding: 8px 15px;
+    margin: 0 10px; /* Space between buttons */
+    background-color: #007bff; /* Blue background for buttons */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer; /* Cursor indicates button */
+    font-size: 16px; /* Readable font size */
+}
+
+button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+}
+
+.message-container {
+    background-color: #f8f8f8; /* Light gray background for the container */
+    padding: 10px 20px;  /* Padding for aesthetics */
+    margin: 10px auto;  /* Auto margins for horizontal centering */
+    border-radius: 5px;  /* Rounded corners */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);  /* Subtle shadow for depth */
+    font-size: 16px;  /* Larger text for visibility */
+    color: #333;  /* Darker text for better readability */
+    text-align: center;  /* Center text alignment */
+    width: 60%;  /* Match the width of the game container */
+    max-width: 800px;  /* Maximum width to align with the game container */
+}
+
+
+.scoreboards-container {
+    display: flex;
+    justify-content: center;  /* Align scorecards centrally */
+    margin: 20px auto;  /* Top and bottom margin with auto horizontal margins */
+    max-width: 42.5%;  /* Limiting the max width for better layout control */
+    flex-wrap: wrap;  /* Allows scoreboards to wrap on smaller screens */
+    gap: 10px;  /* Adds space between scoreboards */
+}
+
+.scoreboard {
+    flex: 1 1 50px;  /* Each scoreboard can grow and shrink but base at 300px */
+    background-color: #fff;
+    padding: 10px;
+    border: 1px solid #ddd;  /* Lighter border color */
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin: 0 10px;  /* Horizontal margin for spacing */
+}
+
+.scoreboard h3 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 10px;  /* Space after the title */
+}
+
+.score {
+    margin-bottom: 5px;
+    font-size: 14px;  /* Smaller font size for a more compact look */
+}
+
+.score span {
+    float: right;  /* Keeps the score numbers to the right */
+    font-weight: bold;
+}
+
+
+.scoreboard table {
+    width: 100%;  /* Full width of the scoreboard */
+    border-collapse: collapse;  /* Ensures no space between borders */
+}
+
+.scoreboard td {
+    padding: 4px 8px;  /* Padding inside each cell for spacing */
+    border-bottom: 1px solid #eee;  /* Light line between rows for better readability */
+}
+
+.scoreboard td:first-child {
+    text-align: left;  /* Aligns labels to the left */
+    width: 70%;  /* Larger width for categories */
+}
+
+.scoreboard td:last-child {
+    text-align: right;  /* Aligns numbers to the right */
+    font-weight: bold;
+}
+
+.scoreboard tr:last-child td {
+    border-bottom: none;  /* No border at the bottom of the last row */
+}
+
+.game-footer {
+    text-align: center;
+    padding: 10px 0;
+    margin-top: 20px; /* Adds some space between the game content and the footer */
+    background-color: #f1f1f1; /* Light grey background */
+    color: #666; /* Dark grey text color */
+    font-size: 14px; /* Smaller font size for footer text */
+    border-top: 1px solid #e0e0e0; /* Light border top for a slight separation */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+footer p {
+    margin: 0; /* Removes default margin for clean spacing */
+}
+
+
+.settings-panel {
+    width: 250px;
+    position: fixed;
+    left: -300px; /* Initially hidden */
+    top: 0;
+    height: 100%;
+    background-color: #f9f9f9;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.4);
+    transition: left 0.3s;
+}
+
+.settings-panel h2 {
+    padding: 10px;
+}
+
+.settings-panel label,
+.settings-panel input {
+    padding: 10px;
+    display: block;
+    width: 90%;
+    margin: 5px auto;
+}
+
+.settings-panel input {
+    padding: 5px;
+}
+
+
+.ai-assistant {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 60%;
+    max-width: 800px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+
+
+.ai-assistant h3 {
+    text-align: center;
+    color: #333;
+}
+
+.action-details {
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin: 5px 0;
+    width: 100%;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+#bestActionsContainer, #histogramContainer {
+    width: 100%;
+}
+
+#histogramContainer h4,
+
+#bestActionsContainer h4 {
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+#histogramContainer {
+    display: block;
+    max-width: 100%; 
+    height: 100%; 
+    padding: 10px;
+    box-sizing: border-box; 
+}
+
+#outcomeHistogram {
+    width: 100% !important; /* Force the canvas to fill the container */
+    height: 350px !important; /* Adjust height automatically */
+    display: block; /* Avoid inline default of canvas */
+}
+
+.hidden {
+    display: none; /* Hide elements not active */
+}
+
+.active {
+    background-color: #f0f0f0; /* Light grey background for the active element */
+    border-left: 5px solid #007bff; /* Blue left border for active element */
+}
