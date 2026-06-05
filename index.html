@@ -17,16 +17,16 @@
     </div>
     <div id="settingsPanel" class="settings-panel">
         <h2>AI Settings</h2>
-        <label for="numSimulations">Number of Simulations:</label>
-        <input type="number" id="numSimulations" value="1000">
-        <label for="depth">Simulation Depth:</label>
-        <input type="number" id="depth" value="100">
-        <label for="uctCValue">UCT C value:</label>
-        <input type="number" id="uctCValue" value="1.414">
-        <label for="pruningFactor">Pruning factor:</label>
-        <input type="number" id="pruningFactor" value="0">
-        <label for="pruningThreshold">Pruning threshold:</label>
-        <input type="number" id="pruningThreshold" value="0">
+        <label for="strength">AI strength:</label>
+        <select id="strength">
+            <option value="300">Fast (300 simulations)</option>
+            <option value="1000" selected>Balanced (1000 simulations)</option>
+            <option value="3000">Strong (3000 simulations)</option>
+        </select>
+        <label for="uctCValue">Exploration (UCT C):</label>
+        <input type="number" id="uctCValue" value="1.414" step="0.1" min="0">
+        <p class="settings-hint">Higher explores more options; ~1.4 is a good default.</p>
+        <p id="decisionTime" class="settings-hint">Last decision: –</p>
     </div>
     <div class="game-container">
         <div class="dice-container">
@@ -54,11 +54,13 @@
         <div class="buttons-container">
             <button id="rollDiceBtn">Roll dice</button>
             <button id="resetGameBtn">Reset game</button>
+            <span id="thinkingIndicator" class="thinking-indicator hidden"><span class="spinner"></span>thinking…</span>
         </div>
     </div>
     <div class="message-container">
         <p id="gameMessage">Message about the game</p>
         <p id="remainingRolls">Rolls left : 3</p>
+        <p id="aiReasoning"></p>
     </div>
     <div class="scoreboards-container">
         <div class="scoreboard" id="playerScoreboard">
@@ -108,6 +110,13 @@
                     <tr><td>Total score:</td><td id="totalScore"><span class="score-output">0</span></td><td></td></tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+    <div id="endGameModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="endGameTitle">Game over</h2>
+            <p id="endGameDetail"></p>
+            <button id="playAgainBtn">Play again</button>
         </div>
     </div>
     <footer class="game-footer">

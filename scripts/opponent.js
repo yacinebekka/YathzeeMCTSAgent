@@ -3,77 +3,94 @@ import { GameEngine, State, Action } from './game.js';
 document.addEventListener('DOMContentLoaded', () => {
     const diceElements = document.querySelectorAll('.dice-container .dice');
     const rollButton = document.getElementById('rollDiceBtn');
-	const aiScoreButtons = document.querySelectorAll('#aiScoreboard .score-checkbox');
-	const playerScoreButtons = document.querySelectorAll('#playerScoreboard .score-checkbox');
+    const aiScoreButtons = document.querySelectorAll('#aiScoreboard .score-checkbox');
+    const playerScoreButtons = document.querySelectorAll('#playerScoreboard .score-checkbox');
 
     const statusMessage = document.getElementById('gameMessage');
+    const aiReasoning = document.getElementById('aiReasoning');
     const remainingRolls = document.getElementById('remainingRolls');
     const resetButton = document.getElementById('resetGameBtn');
     const holdCheckboxes = document.querySelectorAll('.hold-dice');
+    const thinkingIndicator = document.getElementById('thinkingIndicator');
+    const decisionTimeEl = document.getElementById('decisionTime');
 
-    let numSimulations = document.getElementById('numSimulations').value;
-    let simulationDepth = document.getElementById('depth').value;
-    let UCTCValue = document.getElementById('uctCValue').value;
-    let pruningFactor = document.getElementById('pruningFactor').value;
-    let pruningThreshold = document.getElementById('pruningThreshold').value;
+    // --- Config (parsed as numbers, updated live) ---
+    let numSimulations = Number(document.getElementById('strength').value);
+    let UCTCValue = Number(document.getElementById('uctCValue').value);
+    document.getElementById('strength').addEventListener('change', e => { numSimulations = Number(e.target.value); });
+    document.getElementById('uctCValue').addEventListener('change', e => { UCTCValue = Number(e.target.value); });
 
     const worker = new Worker('scripts/mctsWorker.js', { type: 'module' });
 
-	let playerState = new State();
-	let aiState = new State();
-	const gameEngine = new GameEngine();
-	let playerTurn = true;
+    let playerState = new State();
+    let aiState = new State();
+    const gameEngine = new GameEngine();
+    let playerTurn = true;
 
-	updateDiceDisplay(playerState);
-	disableScoring(aiScoreButtons);
-	disableScoring(playerScoreButtons);
+    updateDiceDisplay(playerState);
+    disableScoring(aiScoreButtons);
+    disableScoring(playerScoreButtons);
 
-	function aiPlay() {
+    // ---- Busy / thinking state ----
+    function setBusy(busy) {
+        thinkingIndicator.classList.toggle('hidden', !busy);
+        rollButton.disabled = busy;
+        resetButton.disabled = busy;
+        if (busy) disableScoring(playerScoreButtons);
+    }
 
-		statusMessage.textContent = "AI is thinking...";
+    function prettyCategory(c) {
+        return c.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+    }
 
-		const gameConfig = {
-	        numSimulations: numSimulations,
-	        simulationDepth: simulationDepth,
-	        pruningThreshold: pruningThreshold,
-	        UCTCValue: UCTCValue,
-	        pruningFactor: pruningFactor,
-            topXActions : 1
-	    };
-
-		updateDiceDisplay(aiState);
-
-		// possibleActions = gameEngine.getPossibleActions(aiState);
-		// chosenAction = possibleActions[Math.floor(Math.random()*possibleActions.length)];
-		// aiState = gameEngine.applyAction(aiState, chosenAction);
-
-        if (aiState.rollsLeft === 3) {
-            aiState = gameEngine.applyAction(aiState, new Action('roll', []));
-            aiPlay()
-        } else {
-            let stateRepresentationForWorker = aiState;
-            worker.postMessage({ stateRepresentationForWorker, gameConfig });
-
-            worker.onmessage = function(event) {
-                const { topActions } = event.data;
-                console.log(topActions);
-                aiState = gameEngine.applyAction(aiState, topActions[0].action);
-
-                updateDiceDisplay(aiState);
-                updateScoreDisplay(aiScoreButtons, aiState, false);
-                statusMessage.textContent = "AI move completed.";
-                
-                if (topActions[0].action.actionType === "score") {
-                    playerTurn = true;
-                    statusMessage.textContent = "Your turn. Roll or score.";
-                } else {
-                    aiPlay(); // Trigger next AI action if not scoring
-                }
-            };
+    function describeAIAction(action, before) {
+        if (action.actionType === 'score') {
+            const pts = gameEngine.calculateScore(action.details, before.dice);
+            return `AI scored ${prettyCategory(action.details)} for ${pts}.`;
         }
-	}
+        if (!action.details || action.details.length === 0) return 'AI re-rolled all dice.';
+        const kept = action.details.map(i => before.dice[i]).sort((a, b) => a - b);
+        return `AI kept ${kept.join(', ')} and re-rolled the rest.`;
+    }
 
-    // Function to update the display of dice on the page
+    function aiPlay() {
+        setBusy(true);
+        statusMessage.textContent = 'AI is thinking...';
+        updateDiceDisplay(aiState);
+
+        if (aiState.rollsLeft === 3) {                       // forced first roll, no search
+            aiState = gameEngine.applyAction(aiState, new Action('roll', []));
+            aiPlay();
+            return;
+        }
+
+        const gameConfig = { numSimulations, simulationDepth: 100, UCTCValue, topXActions: 1 };
+        const t0 = performance.now();
+        worker.postMessage({ stateRepresentationForWorker: aiState, gameConfig });
+
+        worker.onmessage = function (event) {
+            const { topActions } = event.data;
+            const action = topActions[0].action;
+            const before = aiState;
+
+            decisionTimeEl.textContent = `Last decision: ${Math.round(performance.now() - t0)} ms`;
+            aiReasoning.textContent = describeAIAction(action, before);
+
+            aiState = gameEngine.applyAction(before, action);
+            updateDiceDisplay(aiState);
+            updateScoreDisplay(aiScoreButtons, aiState, false);
+
+            if (action.actionType === 'score') {
+                playerTurn = true;
+                setBusy(false);
+                statusMessage.textContent = 'Your turn. Roll or score.';
+                checkGameOver();
+            } else {
+                aiPlay();                                    // continue the AI's turn
+            }
+        };
+    }
+
     function updateDiceDisplay(state) {
         state.dice.forEach((value, index) => {
             diceElements[index].textContent = value;
@@ -83,149 +100,102 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateScoreDisplay(scoreButtons, state, isHuman) {
         scoreButtons.forEach(checkbox => {
-            const category = checkbox.name;
             const scoreOutput = checkbox.closest('tr').querySelector('.score-output');
-            scoreOutput.textContent = state.scoreCard[category] !== null ? state.scoreCard[category] : 0;
-            checkbox.checked = state.scoreCard[category] !== null; 
+            scoreOutput.textContent = state.scoreCard[checkbox.name] !== null ? state.scoreCard[checkbox.name] : 0;
+            checkbox.checked = state.scoreCard[checkbox.name] !== null;
         });
-    	// Display calculations
-
-    	let upperScoreDisplay, lowerScoreDisplay, bonusDisplay, totalScoreDisplay;
-
-    	if (isHuman === true) {
-	   		upperScoreDisplay = document.querySelector('#playerScoreboard #upperScore');
-	        lowerScoreDisplay = document.querySelector('#playerScoreboard #lowerScore');
-	        bonusDisplay = document.querySelector('#playerScoreboard #bonus');
-	        totalScoreDisplay = document.querySelector('#playerScoreboard #totalScore');
-    	} else {
-	   		upperScoreDisplay = document.querySelector('#aiScoreboard  #upperScore');
-	        lowerScoreDisplay = document.querySelector('#aiScoreboard  #lowerScore');
-	        bonusDisplay = document.querySelector('#aiScoreboard  #bonus');
-	        totalScoreDisplay = document.querySelector('#aiScoreboard  #totalScore');    		
-    	};
-
-    	console.log(isHuman);
-    	console.log(upperScoreDisplay);
-
+        const board = isHuman ? '#playerScoreboard' : '#aiScoreboard';
         const upperScore = gameEngine.calculateUpperScore(state.scoreCard);
         const lowerScore = gameEngine.calculateLowerScore(state.scoreCard);
         const bonus = upperScore >= 63 ? 35 : 0;
-        const totalScore = upperScore + lowerScore + bonus;
-
-        upperScoreDisplay.textContent = upperScore;
-        lowerScoreDisplay.textContent = lowerScore;
-        bonusDisplay.textContent = bonus;
-        totalScoreDisplay.textContent = totalScore;
+        document.querySelector(`${board} #upperScore`).textContent = upperScore;
+        document.querySelector(`${board} #lowerScore`).textContent = lowerScore;
+        document.querySelector(`${board} #bonus`).textContent = bonus;
+        document.querySelector(`${board} #totalScore`).textContent = upperScore + lowerScore + bonus;
     }
 
-    // Function to roll the dice
     function rollDice() {
         if (!playerTurn || playerState.rollsLeft === 0 || playerState.isFinal()) {
-            statusMessage.textContent = "No rolls left or game over.";
+            statusMessage.textContent = 'No rolls left or game over.';
             return;
         }
-
-        playerState.held = Array.from(holdCheckboxes, checkbox => checkbox.checked)
-        playerState = gameEngine.rollDice(playerState, playerState.dice.map((_, index) => !holdCheckboxes[index].checked));
-
+        playerState.held = Array.from(holdCheckboxes, cb => cb.checked);
+        playerState = gameEngine.rollDice(playerState);
         updateDiceDisplay(playerState);
         updateRollsLeftDisplay();
-        statusMessage.textContent = "Dice rolled. Choose your next action.";
-
-        if (playerState.rollsLeft === 0) {
-            enableScoring(playerScoreButtons);
-        } else {
-            disableScoring(playerScoreButtons);
-        }
+        statusMessage.textContent = 'Dice rolled. Choose your next action.';
+        if (playerState.rollsLeft === 0) enableScoring(playerScoreButtons);
+        else disableScoring(playerScoreButtons);
     }
 
     function enableScoring(scoreButtons) {
-        scoreButtons.forEach(button => {
-            button.disabled = false;
-        });
-        statusMessage.textContent = "Select a score category to apply your points.";
+        scoreButtons.forEach(b => { b.disabled = false; });
+        statusMessage.textContent = 'Select a score category to apply your points.';
     }
-
     function disableScoring(scoreButtons) {
-        scoreButtons.forEach(button => {
-            button.disabled = true;
-        });
+        scoreButtons.forEach(b => { b.disabled = true; });
     }
 
     function handleScoreSelection(event) {
         const checkbox = event.target;
         const category = checkbox.name;
         if (!playerTurn || playerState.rollsLeft > 0 || playerState.scoreCard[category] !== null) {
-            statusMessage.textContent = "Cannot score at this time or already scored.";
-	        checkbox.checked = false; // Prevent checkbox from being checked
-	        return;
+            statusMessage.textContent = 'Cannot score at this time or already scored.';
+            checkbox.checked = false;
+            return;
         }
-
         playerState = gameEngine.score(playerState, category);
-        playerState.dice.forEach((value, index) => {
-            diceElements[index].textContent = value;
-            holdCheckboxes[index].checked = playerState.held[index];
-        });
-
+        updateDiceDisplay(playerState);
         updateScoreDisplay(playerScoreButtons, playerState, true);
-        disableScoring(playerScoreButtons); // Ensure no further scoring until next turn
+        disableScoring(playerScoreButtons);
         updateRollsLeftDisplay();
 
         playerTurn = false;
-        statusMessage.textContent = `Scored on ${category}. AI's turn next.`;
+        statusMessage.textContent = `Scored on ${prettyCategory(category)}. AI's turn next.`;
+        if (playerState.isFinal() && aiState.isFinal()) { checkGameOver(); return; }
         aiPlay();
     }
 
-    // Function to update remaining rolls display
     function updateRollsLeftDisplay() {
         remainingRolls.textContent = ` Rolls left: ${playerState.rollsLeft}`;
     }
 
-    function resetGame() {
-        playerState = new State();
-        updateDiceDisplay(playerState);
-        updateScoreDisplay(playerScoreButtons, playerState, true);
-        disableScoring(playerScoreButtons)
-        playerScoreButtons.forEach(button => {
-            button.checked = false;
-        });
-
-        aiState = new State();
-        updateDiceDisplay(aiState);
-        updateScoreDisplay(aiScoreButtons, aiState, false);
-        disableScoring(aiScoreButtons)
-        aiScoreButtons.forEach(button => {
-            button.checked = false;
-        });
-
-        updateRollsLeftDisplay();
-        statusMessage.textContent = "Game reset. Roll the dice to start playing!";
+    // ---- End of game ----
+    function checkGameOver() {
+        if (!(playerState.isFinal() && aiState.isFinal())) return;
+        const p = gameEngine.calculateTotalScore(playerState.scoreCard);
+        const a = gameEngine.calculateTotalScore(aiState.scoreCard);
+        const title = p > a ? 'You win! \uD83C\uDF89' : (a > p ? 'AI wins' : "It's a tie");
+        document.getElementById('endGameTitle').textContent = title;
+        document.getElementById('endGameDetail').textContent = `Final score \u2014 You: ${p}, AI: ${a}`;
+        document.getElementById('endGameModal').classList.remove('hidden');
     }
 
-    // Event listener for rolling dice
+    function resetGame() {
+        playerState = new State();
+        aiState = new State();
+        playerTurn = true;
+        updateDiceDisplay(playerState);
+        updateScoreDisplay(playerScoreButtons, playerState, true);
+        updateScoreDisplay(aiScoreButtons, aiState, false);
+        disableScoring(playerScoreButtons);
+        disableScoring(aiScoreButtons);
+        playerScoreButtons.forEach(b => { b.checked = false; });
+        aiScoreButtons.forEach(b => { b.checked = false; });
+        updateRollsLeftDisplay();
+        aiReasoning.textContent = '';
+        setBusy(false);
+        document.getElementById('endGameModal').classList.add('hidden');
+        statusMessage.textContent = 'Game reset. Roll the dice to start playing!';
+    }
+
     rollButton.addEventListener('click', rollDice);
-
-    // Event listener for resetting the game
     resetButton.addEventListener('click', resetGame);
+    document.getElementById('playAgainBtn').addEventListener('click', resetGame);
+    playerScoreButtons.forEach(b => b.addEventListener('change', handleScoreSelection));
 
-    playerScoreButtons.forEach(button => {
-        button.addEventListener('change', handleScoreSelection);
+    document.getElementById('settingsBtn').addEventListener('click', function () {
+        const panel = document.getElementById('settingsPanel');
+        panel.style.left = (panel.style.left === '0px') ? '-300px' : '0px';
     });
-
-
-    // Setting panel
-    document.getElementById('settingsBtn').addEventListener('click', function() {
-	    const settingsPanel = document.getElementById('settingsPanel');
-	    if (settingsPanel.style.left === '0px') {
-	        settingsPanel.style.left = '-300px';
-		    numSimulations = document.getElementById('numSimulations').value;
-		    simulationDepth = document.getElementById('depth').value;
-		    UCTCValue = document.getElementById('uctCValue').value;
-		    pruningFactor = document.getElementById('pruningFactor').value;
-		    pruningThreshold = document.getElementById('pruningThreshold').value;
-	    } else {
-	        settingsPanel.style.left = '0px';
-	    }
-	});
-
 });

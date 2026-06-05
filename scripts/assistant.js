@@ -1,213 +1,177 @@
 import { GameEngine, State, Action } from './game.js';
-import { Chart, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, BarController } from 'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/+esm'
+import { Chart, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, BarController } from 'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/+esm';
 
-Chart.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  BarController
-);
+Chart.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, BarController);
 
 document.addEventListener('DOMContentLoaded', () => {
     const diceElements = document.querySelectorAll('.dice-container .dice');
+    const diceBoxes = document.querySelectorAll('.dice-container .dice-box');
     const rollButton = document.getElementById('rollDiceBtn');
-	const playerScoreButtons = document.querySelectorAll('#playerScoreboard .score-checkbox');
+    const playerScoreButtons = document.querySelectorAll('#playerScoreboard .score-checkbox');
 
     const statusMessage = document.getElementById('gameMessage');
     const remainingRolls = document.getElementById('remainingRolls');
     const resetButton = document.getElementById('resetGameBtn');
     const holdCheckboxes = document.querySelectorAll('.hold-dice');
+    const thinkingIndicator = document.getElementById('thinkingIndicator');
+    const decisionTimeEl = document.getElementById('decisionTime');
+    const banner = document.getElementById('recommendationBanner');
 
-    let numSimulations = document.getElementById('numSimulations').value;
-    let simulationDepth = document.getElementById('depth').value;
-    let UCTCValue = document.getElementById('uctCValue').value;
-    let pruningFactor = document.getElementById('pruningFactor').value;
-    let pruningThreshold = document.getElementById('pruningThreshold').value;
+    // --- Config (numbers, live) ---
+    let numSimulations = Number(document.getElementById('strength').value);
+    let UCTCValue = Number(document.getElementById('uctCValue').value);
+    document.getElementById('strength').addEventListener('change', e => { numSimulations = Number(e.target.value); });
+    document.getElementById('uctCValue').addEventListener('change', e => { UCTCValue = Number(e.target.value); });
 
     const actionsDetail = document.querySelectorAll('.action-details');
-
     const worker = new Worker('scripts/mctsWorker.js', { type: 'module' });
 
-    const canvas = document.getElementById('outcomeHistogram');
-    const container = document.getElementById('histogramContainer');
-
-	let playerState = new State();
-	const gameEngine = new GameEngine();
-	let playerTurn = true;
-
+    let playerState = new State();
+    const gameEngine = new GameEngine();
     let recommendedActions;
+    let currentActionIndex = 0;
 
-    let currentActionIndex = 0; // Track the currently selected action
-
-	updateDiceDisplay(playerState);
-	disableScoring(playerScoreButtons);
+    updateDiceDisplay(playerState);
+    disableScoring(playerScoreButtons);
     aiAssist();
 
-    function toggleActionDetails(actionIndex) {
-        // Update UI to reflect which action is selected
-        for (let i = 1; i <= 3; i++) {
-            const element = document.getElementById(`action${i}`);
-            if (i === actionIndex) {
-                element.classList.add('active'); // Add a class to highlight or show details
-                currentActionIndex = actionIndex;
-            } else {
-                element.classList.remove('active');
-            }
-        }
+    function prettyCategory(c) { return c.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase()); }
 
-        // Call to update the chart based on the selected action
+    function describeAction(action) {
+        if (action.actionType === 'score') return `Score in ${prettyCategory(action.details)}`;
+        if (!action.details || action.details.length === 0) return 'Re-roll all dice';
+        const kept = action.details.map(i => playerState.dice[i]).sort((a, b) => a - b);
+        return `Keep ${kept.join(', ')} and re-roll the rest`;
+    }
+
+    // ---- Busy / thinking ----
+    function setBusy(busy) {
+        thinkingIndicator.classList.toggle('hidden', !busy);
+        rollButton.disabled = busy;
+        resetButton.disabled = busy;
+        if (busy) disableScoring(playerScoreButtons);
+        else restoreControls();
+    }
+    function restoreControls() {
+        rollButton.disabled = false;
+        resetButton.disabled = false;
+        if (playerState.rollsLeft === 0 && !playerState.isFinal()) enableScoring(playerScoreButtons);
+        else disableScoring(playerScoreButtons);
+    }
+
+    // ---- Recommendation highlight ----
+    function clearRecommendation() {
+        diceBoxes.forEach(b => b.classList.remove('recommended'));
+        document.querySelectorAll('#playerScoreboard tr.recommended-category')
+            .forEach(tr => tr.classList.remove('recommended-category'));
+        banner.classList.add('hidden');
+    }
+    function highlightRecommendation(action, mean) {
+        clearRecommendation();
+        if (!action) return;
+        if (action.actionType === 'roll') {
+            const keep = new Set(action.details || []);
+            diceBoxes.forEach((box, i) => { if (keep.has(i)) box.classList.add('recommended'); });
+        } else if (action.actionType === 'score') {
+            const cb = document.querySelector(`#playerScoreboard .score-checkbox[name="${action.details}"]`);
+            if (cb) cb.closest('tr').classList.add('recommended-category');
+        }
+        banner.textContent = `Recommended: ${describeAction(action)} \u2014 expected final score \u2248 ${mean.toFixed(0)}`;
+        banner.classList.remove('hidden');
+    }
+
+    function toggleActionDetails(actionIndex) {
+        for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById(`action${i}`);
+            if (i === actionIndex) { el.classList.add('active'); currentActionIndex = actionIndex; }
+            else el.classList.remove('active');
+        }
         updateChartForAction(actionIndex);
     }
 
     function updateChartForAction(actionIndex) {
-        // Fetch data corresponding to the selected action
-        const actionData = recommendedActions[actionIndex - 1].scores; // Assuming topActions is globally accessible
-        const labels = actionData.map((_, idx) => `Attempt ${idx + 1}`);
-        createHistogram('outcomeHistogram', labels, actionData);
+        const a = recommendedActions[actionIndex - 1];
+        if (a) createHistogram('outcomeHistogram', a.scores);
     }
 
-
-    function createHistogram(canvasId, labels, data) {
+    function createHistogram(canvasId, data) {
         const ctx = document.getElementById(canvasId).getContext('2d');
-        if (window.myHistogramChart) {
-            window.myHistogramChart.destroy();
-        }
+        if (window.myHistogramChart) window.myHistogramChart.destroy();
 
-        // Calculate frequency of each score
-        let frequencyMap = new Map();
-        data.forEach((value, index) => {
-            if (frequencyMap.has(value)) {
-                frequencyMap.set(value, frequencyMap.get(value) + 1);
-            } else {
-                frequencyMap.set(value, 1);
-                labels.push(value); // Only push new labels for unique values
-            }
-        });
-
-        // Prepare labels and corresponding frequency data
-        let chartData = Array.from(frequencyMap.keys()).map(key => ({
-            label: key,
-            freq: frequencyMap.get(key)
-        }));
-
-        // Sort data based on the score value (labels are the scores here)
-        chartData.sort((a, b) => a.label - b.label);
+        const frequency = new Map();
+        data.forEach(v => frequency.set(v, (frequency.get(v) || 0) + 1));
+        const chartData = [...frequency.entries()]
+            .map(([label, freq]) => ({ label, freq }))
+            .sort((a, b) => a.label - b.label);
 
         window.myHistogramChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: chartData.map(data => `${data.label}`),
+                labels: chartData.map(d => `${d.label}`),
                 datasets: [{
-                    label: 'Frequency of estimated state-action value',
-                    data: chartData.map(data => data.freq),
-                    backgroundColor: 'rgba(33, 102, 172, 1)', // Darker blue and less transparency
-                    borderColor: 'rgba(33, 102, 172, 1)', // Darker blue for the border
+                    label: 'Simulations ending at this final score',
+                    data: chartData.map(d => d.freq),
+                    backgroundColor: 'rgba(33, 102, 172, 1)',
+                    borderColor: 'rgba(33, 102, 172, 1)',
                     borderWidth: 1
                 }]
             },
             options: {
                 scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0 // Ensures that the scale ticks are whole numbers
-                        }
-                    },
-                    x: {
-                        ticks: {
-                            maxRotation: 90, // Rotate labels to 90 degrees
-                            minRotation: 45, // Minimum rotation at 45 degrees
-                            autoSkip: true, // Enable automatic label skipping
-                            maxTicksLimit: 20 // Adjust as needed based on data
-                        }
-                    }
+                    y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Frequency' } },
+                    x: { ticks: { maxRotation: 90, minRotation: 45, autoSkip: true, maxTicksLimit: 20 },
+                         title: { display: true, text: 'Final game score' } }
                 },
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true
-                    },
-                    tooltip: {
-                        enabled: true,
-                        mode: 'index',
-                        intersect: false
-                    }
-                }
+                plugins: { legend: { display: true }, tooltip: { enabled: true, mode: 'index', intersect: false } }
             }
         });
     }
 
-	function aiAssist() {
+    function aiAssist() {
+        if (playerState.rollsLeft === 3) { clearRecommendation(); return; }   // forced first roll; nothing to advise
 
-        if (playerState.rollsLeft === 3) {
-            return;
-        }
+        setBusy(true);
+        statusMessage.textContent = 'AI is thinking...';
+        const gameConfig = { numSimulations, simulationDepth: 100, UCTCValue, topXActions: 3 };
+        const t0 = performance.now();
+        worker.postMessage({ stateRepresentationForWorker: playerState, gameConfig });
 
-		statusMessage.textContent = "AI is thinking...";
-
-		const gameConfig = {
-	        numSimulations: numSimulations,
-	        simulationDepth: simulationDepth,
-	        pruningThreshold: pruningThreshold,
-	        UCTCValue: UCTCValue,
-	        pruningFactor: pruningFactor,
-            topXActions : 3
-	    };
-
-        let stateRepresentationForWorker = playerState;
-
-        worker.postMessage({ stateRepresentationForWorker, gameConfig });
-
-        worker.onmessage = function(event) {
-            const { topActions } = event.data;
-            recommendedActions = topActions;
-            console.log(topActions);
-            updateAIAssistant(topActions);
-            statusMessage.textContent = "AI suggestions ready.";
+        worker.onmessage = function (event) {
+            recommendedActions = event.data.topActions;
+            decisionTimeEl.textContent = `Last decision: ${Math.round(performance.now() - t0)} ms`;
+            updateAIAssistant(recommendedActions);
+            setBusy(false);
+            statusMessage.textContent = 'AI suggestions ready.';
         };
-	}
-
-
-    function updateAIAssistant(topActions) {
-        // Assuming topActions is an array of objects with necessary data
-        topActions.forEach((action, index) => {
-            console.log(action);
-            let mean = action.totalScore / action.visits;
-            let sampleVariance = action.scores.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) /  (action.scores.length - 1);
-
-            const actionElement = document.getElementById(`action${index + 1}`);
-            // Display action details and statistics
-            actionElement.innerHTML = `
-                <b>Action:</b> ${action.action.actionType} |
-                <b>Details:</b> ${JSON.stringify(action.action.details)} <br>
-                <b>Estimated state-action value:</b> ${mean.toFixed(2)} <br>
-                <b>Standard error:</b> ${Math.sqrt(sampleVariance / action.scores.length).toFixed(2)} <br>
-                <b>Sample standard deviation :</b> ${Math.sqrt(sampleVariance).toFixed(2)} <br>
-                <b>Sample size:</b> ${action.visits}
-            `;      
-        });
-
-        if (topActions.length < 3) {
-            const actionElement = document.getElementById(`action3`);
-            actionElement.innerHTML = ``;
-
-            if (topActions.length < 2) {
-                const actionElement = document.getElementById(`action2`);
-                actionElement.innerHTML = ``;               
-            };
-        };
-
-        toggleActionDetails(1);
-
     }
 
+    function updateAIAssistant(topActions) {
+        topActions.forEach((action, index) => {
+            const mean = action.totalScore / action.visits;
+            const variance = action.scores.length > 1
+                ? action.scores.reduce((acc, v) => acc + (v - mean) ** 2, 0) / (action.scores.length - 1) : 0;
+            const sd = Math.sqrt(variance);
+            const se = sd / Math.sqrt(action.scores.length || 1);
+            const lo = (mean - 1.96 * se).toFixed(0);
+            const hi = (mean + 1.96 * se).toFixed(0);
 
+            document.getElementById(`action${index + 1}`).innerHTML = `
+                <span class="action-title"><b>${index + 1}. ${describeAction(action.action)}</b></span><br>
+                <b>Expected final score:</b> ${mean.toFixed(1)}
+                <span class="action-ci">(95% CI ${lo}\u2013${hi})</span><br>
+                <b>Spread (SD):</b> ${sd.toFixed(1)} &nbsp;|&nbsp;
+                <b>Simulations:</b> ${action.visits}
+            `;
+        });
+        for (let i = topActions.length; i < 3; i++) document.getElementById(`action${i + 1}`).innerHTML = '';
 
-    // Function to update the display of dice on the page
+        const best = topActions[0];
+        if (best) highlightRecommendation(best.action, best.totalScore / best.visits);
+        toggleActionDetails(1);
+    }
+
     function updateDiceDisplay(state) {
         state.dice.forEach((value, index) => {
             diceElements[index].textContent = value;
@@ -215,148 +179,79 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function updateScoreDisplay(scoreButtons, state, isHuman) {
+    function updateScoreDisplay(scoreButtons, state) {
         scoreButtons.forEach(checkbox => {
-            const category = checkbox.name;
             const scoreOutput = checkbox.closest('tr').querySelector('.score-output');
-            scoreOutput.textContent = state.scoreCard[category] !== null ? state.scoreCard[category] : 0;
-            checkbox.checked = state.scoreCard[category] !== null; 
+            scoreOutput.textContent = state.scoreCard[checkbox.name] !== null ? state.scoreCard[checkbox.name] : 0;
+            checkbox.checked = state.scoreCard[checkbox.name] !== null;
         });
-    	// Display calculations
-
-    	let upperScoreDisplay, lowerScoreDisplay, bonusDisplay, totalScoreDisplay;
-
-    	if (isHuman === true) {
-	   		upperScoreDisplay = document.querySelector('#playerScoreboard #upperScore');
-	        lowerScoreDisplay = document.querySelector('#playerScoreboard #lowerScore');
-	        bonusDisplay = document.querySelector('#playerScoreboard #bonus');
-	        totalScoreDisplay = document.querySelector('#playerScoreboard #totalScore');
-    	} else {
-	   		upperScoreDisplay = document.querySelector('#aiScoreboard  #upperScore');
-	        lowerScoreDisplay = document.querySelector('#aiScoreboard  #lowerScore');
-	        bonusDisplay = document.querySelector('#aiScoreboard  #bonus');
-	        totalScoreDisplay = document.querySelector('#aiScoreboard  #totalScore');    		
-    	};
-
-
         const upperScore = gameEngine.calculateUpperScore(state.scoreCard);
         const lowerScore = gameEngine.calculateLowerScore(state.scoreCard);
         const bonus = upperScore >= 63 ? 35 : 0;
-        const totalScore = upperScore + lowerScore + bonus;
-
-        upperScoreDisplay.textContent = upperScore;
-        lowerScoreDisplay.textContent = lowerScore;
-        bonusDisplay.textContent = bonus;
-        totalScoreDisplay.textContent = totalScore;
+        document.querySelector('#playerScoreboard #upperScore').textContent = upperScore;
+        document.querySelector('#playerScoreboard #lowerScore').textContent = lowerScore;
+        document.querySelector('#playerScoreboard #bonus').textContent = bonus;
+        document.querySelector('#playerScoreboard #totalScore').textContent = upperScore + lowerScore + bonus;
     }
 
-    // Function to roll the dice
     function rollDice() {
-        if (!playerTurn || playerState.rollsLeft === 0 || playerState.isFinal()) {
-            statusMessage.textContent = "No rolls left or game over.";
+        if (playerState.rollsLeft === 0 || playerState.isFinal()) {
+            statusMessage.textContent = 'No rolls left or game over.';
             return;
         }
-
-        playerState.held = Array.from(holdCheckboxes, checkbox => checkbox.checked)
-        playerState = gameEngine.rollDice(playerState, playerState.dice.map((_, index) => !holdCheckboxes[index].checked));
-
+        playerState.held = Array.from(holdCheckboxes, cb => cb.checked);
+        playerState = gameEngine.rollDice(playerState);
+        clearRecommendation();
         updateDiceDisplay(playerState);
         updateRollsLeftDisplay();
-        statusMessage.textContent = "Dice rolled. Choose your next action.";
-
-        if (playerState.rollsLeft === 0) {
-            enableScoring(playerScoreButtons);
-        } else {
-            disableScoring(playerScoreButtons);
-        }
-
+        statusMessage.textContent = 'Dice rolled. Choose your next action.';
+        if (playerState.rollsLeft === 0) enableScoring(playerScoreButtons);
+        else disableScoring(playerScoreButtons);
     }
 
-    function enableScoring(scoreButtons) {
-        scoreButtons.forEach(button => {
-            button.disabled = false;
-        });
-        statusMessage.textContent = "Select a score category to apply your points.";
-    }
-
-    function disableScoring(scoreButtons) {
-        scoreButtons.forEach(button => {
-            button.disabled = true;
-        });
-    }
+    function enableScoring(scoreButtons) { scoreButtons.forEach(b => { b.disabled = false; }); }
+    function disableScoring(scoreButtons) { scoreButtons.forEach(b => { b.disabled = true; }); }
 
     function handleScoreSelection(event) {
         const checkbox = event.target;
         const category = checkbox.name;
-        if (!playerTurn || playerState.rollsLeft > 0 || playerState.scoreCard[category] !== null) {
-            statusMessage.textContent = "Cannot score at this time or already scored.";
-	        checkbox.checked = false; // Prevent checkbox from being checked
-	        return;
+        if (playerState.rollsLeft > 0 || playerState.scoreCard[category] !== null) {
+            statusMessage.textContent = 'Cannot score at this time or already scored.';
+            checkbox.checked = false;
+            return;
         }
-
         playerState = gameEngine.score(playerState, category);
-        playerState.dice.forEach((value, index) => {
-            diceElements[index].textContent = value;
-            holdCheckboxes[index].checked = playerState.held[index];
-        });
-
-        updateScoreDisplay(playerScoreButtons, playerState, true);
-        disableScoring(playerScoreButtons); // Ensure no further scoring until next turn
+        clearRecommendation();
+        updateDiceDisplay(playerState);
+        updateScoreDisplay(playerScoreButtons, playerState);
+        disableScoring(playerScoreButtons);
         updateRollsLeftDisplay();
-
-        //playerTurn = false;
-        statusMessage.textContent = `Scored on ${category}`;
+        statusMessage.textContent = `Scored on ${prettyCategory(category)}. Roll to start the next turn.`;
     }
 
-    // Function to update remaining rolls display
     function updateRollsLeftDisplay() {
         remainingRolls.textContent = ` Rolls left: ${playerState.rollsLeft}`;
     }
 
     function resetGame() {
         playerState = new State();
+        clearRecommendation();
         updateDiceDisplay(playerState);
-        updateScoreDisplay(playerScoreButtons, playerState, true);
-        disableScoring(playerScoreButtons)
-        playerScoreButtons.forEach(button => {
-            button.checked = false;
-        });
-
+        updateScoreDisplay(playerScoreButtons, playerState);
+        disableScoring(playerScoreButtons);
+        playerScoreButtons.forEach(b => { b.checked = false; });
         updateRollsLeftDisplay();
-        statusMessage.textContent = "Game reset. Roll the dice to start playing!";
+        setBusy(false);
+        statusMessage.textContent = 'Game reset. Roll the dice to start playing!';
     }
 
-    // Event listener for rolling dice
-    rollButton.addEventListener('click', function() {
-            rollDice();
-            aiAssist();  // Get AI suggestions after rolling
-    });
-
-    // Event listener for resetting the game
+    rollButton.addEventListener('click', () => { rollDice(); aiAssist(); });
     resetButton.addEventListener('click', resetGame);
+    playerScoreButtons.forEach(b => b.addEventListener('change', handleScoreSelection));
+    actionsDetail.forEach((el, index) => el.addEventListener('click', () => toggleActionDetails(index + 1)));
 
-    playerScoreButtons.forEach(button => {
-        button.addEventListener('change', handleScoreSelection);
+    document.getElementById('settingsBtn').addEventListener('click', function () {
+        const panel = document.getElementById('settingsPanel');
+        panel.style.left = (panel.style.left === '0px') ? '-300px' : '0px';
     });
-
-    actionsDetail.forEach((actionDetail, index) => {
-        actionDetail.addEventListener('click', () => toggleActionDetails(index + 1));
-    });
-
-
-    // Setting panel
-    document.getElementById('settingsBtn').addEventListener('click', function() {
-	    const settingsPanel = document.getElementById('settingsPanel');
-	    if (settingsPanel.style.left === '0px') {
-	        settingsPanel.style.left = '-300px';
-		    numSimulations = document.getElementById('numSimulations').value;
-		    simulationDepth = document.getElementById('depth').value;
-		    UCTCValue = document.getElementById('uctCValue').value;
-		    pruningFactor = document.getElementById('pruningFactor').value;
-		    pruningThreshold = document.getElementById('pruningThreshold').value;
-	    } else {
-	        settingsPanel.style.left = '0px';
-	    }
-	});
-
 });

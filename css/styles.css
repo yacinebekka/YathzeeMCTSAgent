@@ -283,3 +283,134 @@ footer p {
     background-color: #f0f0f0; /* Light grey background for the active element */
     border-left: 5px solid #007bff; /* Blue left border for active element */
 }
+/* ===================================================================== */
+/* UI improvements: thinking state, recommendations, end-game, settings  */
+/* ===================================================================== */
+
+.hidden { display: none !important; }
+
+/* --- Settings panel controls --- */
+.settings-panel select,
+.settings-panel input[type="number"] {
+    width: 100%;
+    padding: 6px 8px;
+    margin: 4px 0 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+.settings-hint {
+    font-size: 12px;
+    color: #666;
+    margin: -6px 0 14px;
+}
+
+/* --- Thinking indicator + busy state --- */
+.thinking-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+    color: #0056b3;
+    font-weight: bold;
+}
+.thinking-indicator .spinner {
+    width: 16px; height: 16px;
+    border: 3px solid rgba(0, 123, 255, 0.25);
+    border-top-color: #007bff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.is-busy { opacity: 0.6; pointer-events: none; }
+
+/* --- Recommended dice + category highlight (assistant) --- */
+.dice-box.recommended {
+    outline: 3px solid #28a745;
+    outline-offset: 2px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.6);
+}
+.dice-box.recommended::after {
+    content: "keep";
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: #28a745;
+    font-weight: bold;
+}
+tr.recommended-category td {
+    background-color: rgba(40, 167, 69, 0.18);
+    font-weight: bold;
+}
+
+/* --- Recommended-action banner (assistant) --- */
+.recommendation-banner {
+    background: #e8f5e9;
+    border-left: 4px solid #28a745;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 15px;
+}
+
+/* --- Action detail cards --- */
+.action-details {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    background: #fafafa;
+}
+.action-details.active {
+    border-color: #007bff;
+    background: #f0f7ff;
+}
+.action-ci { color: #555; font-size: 13px; }
+
+/* --- AI reasoning line (opponent) --- */
+#aiReasoning {
+    font-style: italic;
+    color: #444;
+    min-height: 1.2em;
+}
+
+/* --- End-of-game modal --- */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: #fff;
+    padding: 28px 32px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    max-width: 90%;
+}
+.modal-content h2 { margin-top: 0; }
+.modal-content button {
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+/* --- Responsive: stack scoreboards / dice on narrow screens --- */
+@media (max-width: 760px) {
+    .scoreboards-container { flex-direction: column; align-items: stretch; }
+    .scoreboards-container > * { width: 100%; margin-bottom: 16px; }
+    .dice-container { flex-wrap: wrap; justify-content: center; }
+    .navbar { flex-direction: column; gap: 8px; }
+}
